@@ -1,34 +1,150 @@
-[engine]
+# ko-translate-middleware 설정 파일
+#
+# 두 가지 독립 설정 블록:
+#   [translator] — 번역 엔진 (LLM이든 전용 API든 독립적으로 선택)
+#   [llm]        — 프록시할 챗봇/에이전트 LLM 엔드포인트
+#
+# 복사 위치: ~/.ko-translate/config.toml
+#            ~/.config/ko-translate/config.toml
+#            /etc/ko-translate/config.toml
+# 또는 --config <경로> 로 직접 지정.
+
+
+# ──────────────────────────────────────────────────────────────
+# [translator] 번역 엔진
+#
+# engine 선택지:
+#   "local"  — LM Studio에 띄운 로컬 번역 모델 (기본값)
+#   "openai" — OpenAI 호환 API (gpt-4o-mini 등, 챗봇 LLM과 별개로 설정)
+#   "google" — Google Cloud Translation API v2 (전용 번역 API)
+#   "deepl"  — DeepL API (전용 번역 API)
+# ──────────────────────────────────────────────────────────────
+[translator]
+
+# ── 옵션 A: 로컬 LM Studio 번역 모델 ─────────────────────────
 engine = "local"
-local_model_url = "http://127.0.0.1:1234"
+local_model_url = "http://127.0.0.1:1234"   # LM Studio 기본 포트
 local_model_name = "gemma-4-korean-uncensored"
-openai_model = "gpt-4o-mini"
-openai_api_key = ""
-openai_base_url = "https://api.openai.com/v1"
 
-[behavior]
-fail_mode = "open"
-streaming_mode = "streaming"
-context_mode = "conversation-aware"
-output_format = "mixed-korean-english"
-korean_detection_mode = true
+# ── 옵션 B: OpenAI API로 번역 ─────────────────────────────────
+# (챗봇용 LLM과 완전히 다른 key/model/endpoint 사용 가능)
+#
+# engine = "openai"
+# openai_base_url = "https://api.openai.com/v1"
+# openai_api_key  = "sk-..."
+# openai_model    = "gpt-4o-mini"
+#
+# OpenAI 호환 로컬 서버(예: Ollama, vLLM)를 번역 전용으로 쓸 때:
+# engine = "openai"
+# openai_base_url = "http://127.0.0.1:11434/v1"   # Ollama
+# openai_api_key  = "ollama"
+# openai_model    = "aya-expanse:8b"
 
-[logging]
-log_level = "info"
-log_file = "~/.ko-translate/failures.log"
-log_max_bytes = 10485760
+# ── 옵션 C: Google Cloud Translation API ─────────────────────
+# engine = "google"
+# google_api_key = "AIzaSy..."
+
+# ── 옵션 D: DeepL API ─────────────────────────────────────────
+# engine = "deepl"
+# deepl_api_key  = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx:fx"
+# deepl_free_tier = true    # true = api-free.deepl.com (무료 플랜)
+#                           # false = api.deepl.com     (유료 플랜)
+
+# ── 번역 동작 공통 설정 ───────────────────────────────────────
+korean_detection_mode = true   # true  = 한국어 감지 시에만 번역
+                               # false = 모든 메시지 번역
+
+fail_mode = "open"             # "open"         = 번역 실패 시 원문 그대로 전달
+                               # "closed"       = 번역 실패 시 에러 반환
+                               # "configurable" = 실패 시 fallback 엔진 시도 (미구현)
+
+output_format = "mixed-korean-english"  # "mixed-korean-english" = 영문 고유명사 보존
+                                        # "pure-korean"          = 전부 한국어로
+
+context_mode = "conversation-aware"     # "conversation-aware" = 대화 맥락 유지
+                                        # "turn-by-turn"       = 턴마다 독립 번역
+
+max_context_turns     = 10     # 맥락으로 유지할 최대 대화 턴 수
+preserve_code_blocks  = true   # 코드 블록(``` ```)을 번역에서 제외
+preserve_technical_terms = true  # 기술 용어 번역 제외 (현재 코드블록과 동일 처리)
+max_retries  = 3
+retry_delay  = 1.0   # 재시도 간격(초)
+
+
+# ──────────────────────────────────────────────────────────────
+# [llm] 프록시 대상 챗봇 / 에이전트 LLM
+#
+# 번역 엔진과 완전히 독립. 어떤 조합이든 가능:
+#   번역=DeepL  + LLM=GPT-4o
+#   번역=로컬   + LLM=Claude
+#   번역=OpenAI + LLM=로컬 LM Studio
+# ──────────────────────────────────────────────────────────────
+[llm]
+
+# ── 옵션 A: OpenAI ────────────────────────────────────────────
+target_url = "https://api.openai.com/v1/chat/completions"
+api_key    = "sk-..."          # 설정하면 클라이언트 Authorization 헤더를 이걸로 교체
+                               # 비워두면 클라이언트가 보낸 헤더 그대로 전달
+timeout    = 60.0
+
+# ── 옵션 B: Anthropic Claude (OpenAI 호환 엔드포인트) ─────────
+# target_url = "https://api.anthropic.com/v1/messages"
+# api_key    = "sk-ant-..."
+
+# ── 옵션 C: 로컬 LM Studio (챗봇용) ──────────────────────────
+# target_url = "http://127.0.0.1:1234/v1/chat/completions"
+# api_key    = ""              # LM Studio는 key 불필요
+
+# ── 옵션 D: Ollama ────────────────────────────────────────────
+# target_url = "http://127.0.0.1:11434/v1/chat/completions"
+# api_key    = "ollama"
+
+# ── 옵션 E: Azure OpenAI ──────────────────────────────────────
+# target_url = "https://<리소스명>.openai.azure.com/openai/deployments/<배포명>/chat/completions?api-version=2024-02-01"
+# api_key    = "<Azure API Key>"
+
+# ── 옵션 F: 사내 / 자체 호스팅 OpenAI 호환 서버 ──────────────
+# target_url = "https://llm.internal.company.com/v1/chat/completions"
+# api_key    = "internal-token"
+
+
+# ──────────────────────────────────────────────────────────────
+# 서버 설정 (최상위)
+# ──────────────────────────────────────────────────────────────
+proxy_host = "127.0.0.1"   # "0.0.0.0" 으로 바꾸면 외부 접근 허용
+proxy_port = 8080
+
+streaming_mode = "streaming"  # "streaming" = 스트리밍 응답 지원
+                              # "buffered"  = 완전 수신 후 번역 (스트리밍 미지원)
+
+log_level        = "info"                    # debug / info / warning / error / critical
+log_file         = "~/.ko-translate/failures.log"
+log_max_bytes    = 10485760   # 10 MB
 log_backup_count = 5
 
-[proxy]
-proxy_host = "127.0.0.1"
-proxy_port = 8080
-proxy_timeout = 60.0
 
-[context]
-max_context_turns = 10
-preserve_code_blocks = true
-preserve_technical_terms = true
-
-[retry]
-max_retries = 3
-retry_delay = 1.0
+# ──────────────────────────────────────────────────────────────
+# 환경변수 오버라이드 (설정 파일보다 우선)
+#
+# 번역 엔진:
+#   KO_TRANSLATE_ENGINE            = local | openai | google | deepl
+#   KO_TRANSLATE_LOCAL_MODEL_URL   = http://...
+#   KO_TRANSLATE_LOCAL_MODEL_NAME  = <모델명>
+#   KO_TRANSLATE_OPENAI_BASE_URL   = https://...
+#   KO_TRANSLATE_OPENAI_API_KEY    = sk-...
+#   KO_TRANSLATE_OPENAI_MODEL      = gpt-4o-mini
+#   KO_TRANSLATE_GOOGLE_API_KEY    = AIza...
+#   KO_TRANSLATE_DEEPL_API_KEY     = ...
+#   KO_TRANSLATE_KOREAN_DETECTION  = true | false
+#   KO_TRANSLATE_FAIL_MODE         = open | closed | configurable
+#
+# LLM:
+#   KO_TRANSLATE_TARGET_URL        = https://...
+#   KO_TRANSLATE_LLM_API_KEY       = sk-...
+#   KO_TRANSLATE_LLM_TIMEOUT       = 60.0
+#
+# 서버:
+#   KO_TRANSLATE_PROXY_HOST        = 127.0.0.1
+#   KO_TRANSLATE_PROXY_PORT        = 8080
+#   KO_TRANSLATE_LOG_LEVEL         = info
+# ──────────────────────────────────────────────────────────────

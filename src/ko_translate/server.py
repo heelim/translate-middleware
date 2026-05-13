@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import time
 from typing import Any
 
@@ -16,7 +15,7 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 from sse_starlette.sse import EventSourceResponse
 
-from .config import TranslationConfig
+from .config import AppConfig
 from .context import ContextManager
 from .engine import TranslationEngine
 from .korean_detector import contains_korean
@@ -24,14 +23,14 @@ from .logging_config import get_logger
 
 
 class ProxyServer:
-    def __init__(self, config: TranslationConfig, engine: TranslationEngine):
+    def __init__(self, config: AppConfig, engine: TranslationEngine):
         self.config = config
         self.engine = engine
         self.logger = get_logger(
             log_file=config.log_file,
             level=config.log_level.value,
         )
-        self.context_manager = ContextManager(max_turns=config.max_context_turns)
+        self.context_manager = ContextManager(max_turns=config.translator.max_context_turns)
         self._start_time = time.time()
         self._metrics = {"requests": 0, "errors": {}, "latencies": []}
 
@@ -63,7 +62,7 @@ class ProxyServer:
             response_data, _ = await self._forward_request(data, request)
             return JSONResponse(response_data)
 
-        needs_translation = self.config.korean_detection_mode and contains_korean(user_content)
+        needs_translation = self.config.translator.korean_detection_mode and contains_korean(user_content)
 
         original_content = user_content
         context = self.context_manager.get_context(session_id) if session_id else []
@@ -78,7 +77,7 @@ class ProxyServer:
             except Exception as e:
                 self.logger.error(f"Translation failed: {e}")
                 self._track_error("translation_error")
-                if self.config.fail_mode.value == "closed":
+                if self.config.translator.fail_mode.value == "closed":
                     return JSONResponse({"error": str(e)}, status_code=500)
 
         is_streaming = data.get("stream", False)
@@ -185,20 +184,17 @@ class ProxyServer:
 
         headers = {}
         for key, value in request.headers.items():
-            if key.lower() not in ("host", "content-length"):
+            if key.lower() not in ("host", "content-length", "authorization"):
                 headers[key] = value
-
-        target_url = os.environ.get(
-            "KO_TRANSLATE_TARGET_URL",
-            "https://api.openai.com/v1/chat/completions",
-        )
+        if self.config.llm.api_key:
+            headers["Authorization"] = f"Bearer {self.config.llm.api_key}"
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                target_url,
+                self.config.llm.target_url,
                 json=data,
                 headers=headers,
-                timeout=self.config.proxy_timeout,
+                timeout=self.config.llm.timeout,
             )
             response_data = response.json()
 
@@ -268,26 +264,23 @@ class ProxyServer:
     ):
         headers = {}
         for key, value in request.headers.items():
-            if key.lower() not in ("host", "content-length"):
+            if key.lower() not in ("host", "content-length", "authorization"):
                 headers[key] = value
-
-        target_url = os.environ.get(
-            "KO_TRANSLATE_TARGET_URL",
-            "https://api.openai.com/v1/chat/completions",
-        )
+        if self.config.llm.api_key:
+            headers["Authorization"] = f"Bearer {self.config.llm.api_key}"
 
         async with httpx.AsyncClient().stream(
             "POST",
-            target_url,
+            self.config.llm.target_url,
             json=data,
             headers=headers,
-            timeout=self.config.proxy_timeout,
+            timeout=self.config.llm.timeout,
         ) as response:
             async for line in response.aiter_lines():
                 yield line
 
 
-def create_app(config: TranslationConfig, engine: TranslationEngine) -> Starlette:
+def create_app(config: AppConfig, engine: TranslationEngine) -> Starlette:
     server = ProxyServer(config, engine)
 
     async def root(request: Request):
@@ -311,84 +304,44 @@ def create_app(config: TranslationConfig, engine: TranslationEngine) -> Starlett
     return app
 
 
-def run_server(config: TranslationConfig, engine: TranslationEngine):
+def run_server(config: AppConfig, engine: TranslationEngine):
     import uvicorn
 
     app = create_app(config, engine)
-
-    uvicorn.run(
-        app,
-        host=config.proxy_host,
-        port=config.proxy_port,
-        log_level=config.log_level.value.lower(),
-    )
+    uvicorn.run(app, host=config.proxy_host, port=config.proxy_port, log_level=config.log_level.value.lower())
 
 
 def main():
+    from .config import AppConfig, EngineType, LogLevel
+
     parser = argparse.ArgumentParser(description="Korean Translation Proxy Server")
-    parser.add_argument(
-        "--config",
-        type=str,
-        help="Path to config TOML file",
-    )
-    parser.add_argument(
-        "--port",
-        type=int,
-        help="Proxy port (overrides config)",
-    )
-    parser.add_argument(
-        "--host",
-        type=str,
-        help="Proxy host (overrides config)",
-    )
-    parser.add_argument(
-        "--engine",
-        type=str,
-        choices=["local", "openai"],
-        help="Translation engine type",
-    )
-    parser.add_argument(
-        "--local-url",
-        type=str,
-        help="LM Studio URL",
-    )
-    parser.add_argument(
-        "--log-level",
-        type=str,
-        choices=["debug", "info", "warning", "error"],
-        help="Logging level",
-    )
+    parser.add_argument("--config", type=str, help="Path to config TOML file")
+    parser.add_argument("--port", type=int, help="Proxy port (overrides config)")
+    parser.add_argument("--host", type=str, help="Proxy host (overrides config)")
+    parser.add_argument("--translator-engine", type=str, choices=["local", "openai", "google", "deepl"], help="Translation engine")
+    parser.add_argument("--local-url", type=str, help="LM Studio URL for translation")
+    parser.add_argument("--target-url", type=str, help="Target LLM URL")
+    parser.add_argument("--log-level", type=str, choices=["debug", "info", "warning", "error"], help="Log level")
 
     args = parser.parse_args()
 
-    if args.config:
-        config = TranslationConfig.from_file(args.config)
-    else:
-        config = TranslationConfig.load_default()
+    config = AppConfig.from_file(args.config) if args.config else AppConfig.load_default()
 
     if args.port:
         config.proxy_port = args.port
     if args.host:
         config.proxy_host = args.host
-    if args.engine:
-        from .config import EngineType
-
-        config.engine = EngineType(args.engine)
+    if args.translator_engine:
+        config.translator.engine = EngineType(args.translator_engine)
     if args.local_url:
-        config.local_model_url = args.local_url
+        config.translator.local_model_url = args.local_url
+    if args.target_url:
+        config.llm.target_url = args.target_url
     if args.log_level:
-        from .config import LogLevel
-
         config.log_level = LogLevel(args.log_level)
 
-    engine = TranslationEngine(
-        config,
-        logger=get_logger(
-            log_file=config.log_file,
-            level=config.log_level.value,
-        ),
-    )
-
+    logger = get_logger(log_file=config.log_file, level=config.log_level.value)
+    engine = TranslationEngine(config.translator, logger)
     run_server(config, engine)
 
 

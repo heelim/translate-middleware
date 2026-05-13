@@ -1,11 +1,14 @@
 from .config import (
+    AppConfig,
     ContextMode,
     EngineType,
     FailMode,
+    LLMConfig,
     LogLevel,
     OutputFormat,
     StreamingMode,
-    TranslationConfig,
+    TranslatorConfig,
+    TranslationConfig,  # backward-compat alias
 )
 from .context import ContextManager, ConversationContext, ConversationTurn
 from .engine import TranslationEngine, TranslationError, create_engine
@@ -16,6 +19,9 @@ from .proxy import TranslationProxy
 from .server import ProxyServer, run_server, create_app
 
 __all__ = [
+    "AppConfig",
+    "TranslatorConfig",
+    "LLMConfig",
     "TranslationConfig",
     "TranslationEngine",
     "TranslationError",

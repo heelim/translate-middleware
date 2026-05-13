@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatGPT Mock - Korean Translation Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #202123;
+      color: #ececf1;
+      margin: 0;
+      padding: 20px;
+    }
+    .chat-container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    [data-chat-area] {
+      border: 1px solid #3e3e3f;
+      border-radius: 8px;
+      padding: 16px;
+      min-height: 400px;
+      background: #212121;
+    }
+    [data-message] {
+      padding: 12px;
+      margin: 8px 0;
+      border-radius: 8px;
+      background: #2a2a2a;
+    }
+    [data-role="user"] {
+      background: #343541;
+    }
+    [data-role="assistant"] {
+      background: #444654;
+    }
+    textarea, [data-message-input] {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #3e3e3f;
+      background: #202123;
+      color: #ececf1;
+      resize: vertical;
+      min-height: 60px;
+      font-family: inherit;
+      box-sizing: border-box;
+    }
+    .input-area {
+      margin-top: 16px;
+    }
+    .assistant-message {
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-container">
+    <h1>ChatGPT Mock Interface</h1>
+    <div data-chat-area>
+      <div data-message data-role="user">
+        <div class="user-content">안녕하세요, 반갑습니다!</div>
+      </div>
+      <div data-message data-role="assistant">
+        <div class="assistant-message">Hello! How can I help you today?</div>
+      </div>
+      <div data-message data-role="assistant">
+        <div class="assistant-message">한국어 문장을 영어로 번역해 드릴까요?</div>
+      </div>
+    </div>
+    <div class="input-area">
+      <textarea data-message-input placeholder="Type your message here...">Hello, how are you?</textarea>
+    </div>
+  </div>
+</body>
+</html>

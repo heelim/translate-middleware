@@ -1,0 +1,35 @@
+[data-ko-translated="translated"] {
+  opacity: 1 !important;
+}
+
+[data-ko-translated="pending"] {
+  opacity: 0.7;
+}
+
+[data-ko-translated="error"] {
+  color: #ff6b6b;
+}
+
+.translation-highlight {
+  background: rgba(0, 212, 255, 0.1);
+  border-left: 3px solid #00d4ff;
+  padding-left: 8px;
+}
+
+.ko-translate-indicator {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  background: #00d4ff;
+  color: #1a1a2e;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  z-index: 9999;
+  display: none;
+}
+
+.ko-translate-indicator.visible {
+  display: block;
+}

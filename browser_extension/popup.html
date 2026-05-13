@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <h1>Korean Translation</h1>
+
+    <div class="toggle-row">
+      <label for="enabled">Enable Translation</label>
+      <input type="checkbox" id="enabled" checked>
+    </div>
+
+    <div class="toggle-row">
+      <label for="autoDetect">Auto-detect Language</label>
+      <input type="checkbox" id="autoDetect" checked>
+    </div>
+
+    <div class="input-group">
+      <label for="proxyUrl">Proxy URL</label>
+      <input type="text" id="proxyUrl" value="http://127.0.0.1:8080">
+    </div>
+
+    <div class="input-group">
+      <label for="direction">Default Direction</label>
+      <select id="direction">
+        <option value="auto">Auto-detect</option>
+        <option value="ko-en">Korean → English</option>
+        <option value="en-ko">English → Korean</option>
+      </select>
+    </div>
+
+    <div class="status-row">
+      <span id="status">Ready</span>
+    </div>
+
+    <button id="save">Save Settings</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -81,11 +81,16 @@ retry_delay  = 1.0   # 재시도 간격(초)
 # ──────────────────────────────────────────────────────────────
 [llm]
 
-# ── 옵션 A: OpenAI ────────────────────────────────────────────
-target_url = "https://api.openai.com/v1/chat/completions"
-api_key    = "sk-..."          # 설정하면 클라이언트 Authorization 헤더를 이걸로 교체
-                               # 비워두면 클라이언트가 보낸 헤더 그대로 전달
+# 기본값만 기입하고, 실제 값은 환경변수로 주입:
+#   export KO_TRANSLATE_TARGET_URL=$ANTHROPIC_BASE_URL
+#   export KO_TRANSLATE_LLM_API_KEY=$ANTHROPIC_API_KEY
+target_url = "https://api.anthropic.com/v1/messages"
+api_key    = ""                # 비워두면 클라이언트가 보낸 Authorization 헤더 그대로 전달
 timeout    = 60.0
+
+# ── 옵션 A: OpenAI ────────────────────────────────────────────
+# target_url = "https://api.openai.com/v1/chat/completions"
+# api_key    = ""
 
 # ── 옵션 B: Anthropic Claude (OpenAI 호환 엔드포인트) ─────────
 # target_url = "https://api.anthropic.com/v1/messages"

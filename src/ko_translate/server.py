@@ -266,7 +266,12 @@ class ProxyServer:
         return url.rstrip("/")
 
     async def handle_models(self, request: Request) -> Response:
-        """Proxy GET /models and /v1/models to the upstream LLM."""
+        """Proxy GET /models and /v1/models to the upstream LLM.
+
+        Falls back to a synthetic response when upstream requires auth or is
+        unreachable, so OpenAI-compatible clients (e.g. Hermes) always get a
+        valid 200 and treat this as a verified endpoint.
+        """
         headers = {}
         for key, value in request.headers.items():
             if key.lower() not in ("host", "content-length", "authorization"):
@@ -278,14 +283,26 @@ class ProxyServer:
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(upstream_url, headers=headers)
-                return Response(
-                    content=response.content,
-                    status_code=response.status_code,
-                    media_type=response.headers.get("content-type", "application/json"),
-                )
+                if response.status_code == 200:
+                    return Response(
+                        content=response.content,
+                        status_code=200,
+                        media_type=response.headers.get("content-type", "application/json"),
+                    )
         except Exception as e:
-            self.logger.error(f"Failed to proxy /models: {e}")
-            return JSONResponse({"error": str(e)}, status_code=502)
+            self.logger.warning(f"Could not reach upstream /models ({e}), returning synthetic list")
+
+        # Upstream unreachable or returned non-200 (e.g. 401) — return a
+        # minimal valid response so clients can verify the endpoint exists.
+        return JSONResponse({
+            "object": "list",
+            "data": [{
+                "id": "ko-translate-proxy",
+                "object": "model",
+                "created": int(time.time()),
+                "owned_by": "ko-translate",
+            }],
+        })
 
     async def _stream_request(
         self,

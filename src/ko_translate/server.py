@@ -257,6 +257,36 @@ class ProxyServer:
 
         return Response(content="\n".join(lines) + "\n", media_type="text/plain")
 
+    def _llm_base_url(self) -> str:
+        """Derive the upstream base URL from target_url by stripping the path suffix."""
+        url = self.config.llm.target_url
+        for suffix in ("/chat/completions", "/v1/chat/completions"):
+            if url.endswith(suffix):
+                return url[: -len(suffix)].rstrip("/")
+        return url.rstrip("/")
+
+    async def handle_models(self, request: Request) -> Response:
+        """Proxy GET /models and /v1/models to the upstream LLM."""
+        headers = {}
+        for key, value in request.headers.items():
+            if key.lower() not in ("host", "content-length", "authorization"):
+                headers[key] = value
+        if self.config.llm.api_key:
+            headers["Authorization"] = f"Bearer {self.config.llm.api_key}"
+
+        upstream_url = f"{self._llm_base_url()}/models"
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(upstream_url, headers=headers)
+                return Response(
+                    content=response.content,
+                    status_code=response.status_code,
+                    media_type=response.headers.get("content-type", "application/json"),
+                )
+        except Exception as e:
+            self.logger.error(f"Failed to proxy /models: {e}")
+            return JSONResponse({"error": str(e)}, status_code=502)
+
     async def _stream_request(
         self,
         data: dict[str, Any],
@@ -296,6 +326,8 @@ def create_app(config: AppConfig, engine: TranslationEngine) -> Starlette:
         Route("/", root),
         Route("/health", server.handle_health),
         Route("/metrics", server.handle_metrics),
+        Route("/models", server.handle_models),
+        Route("/v1/models", server.handle_models),
         Route("/v1/chat/completions", server.handle_chat_completion, methods=["POST"]),
     ]
 

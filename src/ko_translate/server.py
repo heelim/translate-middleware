@@ -184,10 +184,9 @@ class ProxyServer:
 
         headers = {}
         for key, value in request.headers.items():
-            if key.lower() not in ("host", "content-length", "authorization"):
+            if key.lower() not in ("host", "content-length", "authorization", "x-api-key"):
                 headers[key] = value
-        if self.config.llm.api_key:
-            headers["Authorization"] = f"Bearer {self.config.llm.api_key}"
+        headers.update(self._llm_auth_headers())
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -257,10 +256,25 @@ class ProxyServer:
 
         return Response(content="\n".join(lines) + "\n", media_type="text/plain")
 
+    def _llm_auth_headers(self) -> dict[str, str]:
+        """Return auth headers for the upstream LLM.
+
+        Sends both Authorization: Bearer (OpenAI-style) and x-api-key
+        (Anthropic-style) so the proxy works with either API without
+        needing provider-specific configuration.
+        """
+        key = self.config.llm.api_key
+        if not key:
+            return {}
+        return {
+            "Authorization": f"Bearer {key}",
+            "x-api-key": key,
+        }
+
     def _llm_base_url(self) -> str:
-        """Derive the upstream base URL from target_url by stripping the path suffix."""
+        """Derive the upstream base URL by stripping the known endpoint suffix."""
         url = self.config.llm.target_url
-        for suffix in ("/chat/completions", "/v1/chat/completions"):
+        for suffix in ("/chat/completions", "/messages"):
             if url.endswith(suffix):
                 return url[: -len(suffix)].rstrip("/")
         return url.rstrip("/")
@@ -295,10 +309,9 @@ class ProxyServer:
         """
         headers = {}
         for key, value in request.headers.items():
-            if key.lower() not in ("host", "content-length", "authorization"):
+            if key.lower() not in ("host", "content-length", "authorization", "x-api-key"):
                 headers[key] = value
-        if self.config.llm.api_key:
-            headers["Authorization"] = f"Bearer {self.config.llm.api_key}"
+        headers.update(self._llm_auth_headers())
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -324,10 +337,9 @@ class ProxyServer:
     ):
         headers = {}
         for key, value in request.headers.items():
-            if key.lower() not in ("host", "content-length", "authorization"):
+            if key.lower() not in ("host", "content-length", "authorization", "x-api-key"):
                 headers[key] = value
-        if self.config.llm.api_key:
-            headers["Authorization"] = f"Bearer {self.config.llm.api_key}"
+        headers.update(self._llm_auth_headers())
 
         async with httpx.AsyncClient().stream(
             "POST",

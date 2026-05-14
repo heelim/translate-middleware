@@ -265,8 +265,34 @@ class ProxyServer:
                 return url[: -len(suffix)].rstrip("/")
         return url.rstrip("/")
 
+    def _normalize_models(self, data: dict) -> dict:
+        """Normalize upstream model list to OpenAI format.
+
+        Handles:
+          - OpenAI  {"object":"list","data":[{"id":...},...]}
+          - Anthropic {"data":[{"id":...,"type":"model",...}],"has_more":...}
+          - Plain list {"models":[...]} or {"data":[...]} without object field
+        """
+        if data.get("object") == "list" and "data" in data:
+            return data
+
+        entries = data.get("data") or data.get("models") or []
+        normalized = []
+        for m in entries:
+            normalized.append({
+                "id": m.get("id") or m.get("name") or "unknown",
+                "object": "model",
+                "created": int(time.time()),
+                "owned_by": m.get("owned_by") or m.get("created_by") or "upstream",
+            })
+        return {"object": "list", "data": normalized}
+
     async def handle_models(self, request: Request) -> Response:
-        """Proxy GET /models and /v1/models to the upstream LLM."""
+        """Proxy GET /models and /v1/models to the upstream LLM.
+
+        Normalizes the response to OpenAI format so any client can parse it
+        regardless of which upstream API (OpenAI, Anthropic, etc.) is connected.
+        """
         headers = {}
         for key, value in request.headers.items():
             if key.lower() not in ("host", "content-length", "authorization"):
@@ -280,11 +306,13 @@ class ProxyServer:
                     f"{self._llm_base_url()}/models",
                     headers=headers,
                 )
+            if response.status_code != 200:
                 return Response(
                     content=response.content,
                     status_code=response.status_code,
-                    media_type=response.headers.get("content-type", "application/json"),
+                    media_type="application/json",
                 )
+            return JSONResponse(self._normalize_models(response.json()))
         except Exception as e:
             self.logger.error(f"Failed to proxy /models: {e}")
             return JSONResponse({"error": str(e)}, status_code=502)
